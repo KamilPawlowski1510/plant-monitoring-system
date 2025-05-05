@@ -4,7 +4,7 @@ import math
 import time
 from time import sleep
 
-#import BlynkLib
+import BlynkLib
 from picamera import PiCamera
 from sense_hat import SenseHat
 
@@ -13,6 +13,11 @@ from grove.grove_light_sensor_v1_2 import GroveLightSensor
 from grove.grove_moisture_sensor import GroveMoistureSensor
 from grove.grove_relay import GroveRelay
 
+# Blynk authentication token
+BLYNK_AUTH = "7os_iwPxKnhgay7WX-KhXgzXi9mgb2Ib"
+
+# Initialise the Blynk instance
+blynk = BlynkLib.Blynk(BLYNK_AUTH)
 
 # Needed for Light sensor and Moisture sensor
 adc = ADC(0x08)
@@ -39,22 +44,24 @@ camera.rotation = 180
 
 MOTION_CHECK_DELAY = 0.1 # How often to check for motion
 MOTION_THRESHOLD = 0.05 # g's acceptable above and below 1 (gravity)
-MOTION_CHECK_COOLDOWN = 1.5 # How long to not check for motion after motion was detected
+MOTION_CHECK_COOLDOWN = 2 # How long to not check for motion after motion was detected
 motion_cooldown_time = 0
 
 SENSOR_CHECK_COOLDOWN = 60 # How long to wait between dealing with none motion sensors
 sensor_check_next_time = 0
 
-light_check_cooldown = 60 # Every minute by default
+LIGHT_CHECK_COOLDOWN = 300 # Every minute by default
 light_check_next_time = 0
 light_min_value = 300 # Minimum amount of light before turning on relay
 
-soil_check_cooldown = 60 # Every minute by default #TODO Add the correct time (do we want to do it the same hour each day?)
-soil_check_next_time = 0
-soil_max_value = 1200 # Maximum mV before the plant needs to be watered again
+daily_task_hour = 12
+daily_task_next_time = 0
 
-# TODO Figure out how to deal with rotation (do we ask the user how many days to wait?)
-# TODO Figure out how to do misting (For ease, we can also do how many days, for fancy version we can do a thing where you select the days)
+soil_max_value = 1200 # Maximum mV before the plant needs to be watered again
+watering_needed = False
+
+misting_counter = 0
+mist_every_x_days = 2
 
 
 def log_data(data_type, value, unit):
@@ -76,53 +83,88 @@ def detect_motion() -> bool:
         return False
 
 def process_light_data():
-    light = light_sensor.light
-    log_data("Light", light, "")
-    # TODO Add data to Blynk
+    light = light_sensor.light / 10.0
+    log_data("Light", light, "%")
+    blynk.virtual_write(0, light)
     if light < light_min_value:
         relay.on()
-        # TODO Add to Blynk that relay true
+        blynk.virtual_write(2, "Currently On")
     else:
         relay.off()
-        # TODO Add to Blynk that relay false
+        blynk.virtual_write(2, "Currently Off")
 
 def process_soil_data():
     moisture_mv = moisture_sensor.moisture
     log_data("Soil Moisture", moisture_mv, "mV")
-    # TODO Add data to Blynk
+    blynk.virtual_write(1, moisture_mv)
     if moisture_mv > soil_max_value:
-        pass # TODO Push a notification here to Blynk
+        watering_needed = True
+    else:
+        watering_needed = False
 
-# TODO ADD BLYNK FUNCTIONS FOR UPDATING VALUES
+def get_next_daily_task_time():
+    global daily_task_next_time
+    current_date = datetime.fromtimestamp(current_time)
+    daily_task_date = current_date.replace(hour=daily_task_hour, minute=0, second=0, microsecond=0)
+
+    daily_task_next_time = daily_task_date.timestamp()
+    if daily_task_next_time <= current_time:
+        daily_task_next_time += 86400
+    
+    print("Next date for daily task: ", datetime.fromtimestamp(daily_task_next_time).strftime("%Y-%m-%d %H:%M:%S"))
+
+# Register handler for virtual pin V4 write event
+@blynk.on("V4")
+def handle_v4_write(value):
+    global daily_task_hour
+    daily_task_hour = value[0]
+    print(f'Daily task hour updated to: {daily_task_hour}')
+    get_next_daily_task_time()
+
+def send_daily_notification():
+    global misting_counter
+    message = "Todays tasks: Rotate the plant"
+    if misting_counter >= mist_every_x_days -1:
+        message += ", mist the plant"
+        misting_counter = 0
+    else:
+        misting_counter += 1
+    if watering_needed:
+        message += ", water the plant"
+    blynk.log_event("daily_notification", message)
+
 
 # Main loop to keep the Blynk connection alive and process events
 if __name__ == "__main__":
-    while True:
-        current_time = time.time()
+    try:
+        while True:
+            current_time = time.time()
 
-        if not motion_cooldown_time or current_time >= motion_cooldown_time:
-            motion_cooldown_time = 0 # TODO This isn't fully efficient but hardly matters
-            if detect_motion():
-                pass
-                # TODO Implement azure functionality
+            if not motion_cooldown_time or current_time >= motion_cooldown_time:
+                if motion_cooldown_time:
+                    motion_cooldown_time = 0
+                if detect_motion():
+                    pass
+                    # TODO Implement azure functionality
 
-                # Camera stuff
-                #image = io.BytesIO()
-                #camera.capture(image, 'jpeg')
-                #image.seek(0)
-                #with open('image.jpg', 'wb') as image_file:
-                    #image_file.write(image.read())
-        
-        if current_time >= sensor_check_next_time:
-            #blynk.run()  # Process Blynk events
-            if current_time >= light_check_next_time:
-                process_light_data()
-                light_check_next_time = current_time + light_check_cooldown
-            if current_time >= soil_check_next_time:
-                process_soil_data()
-                soil_check_next_time = current_time + soil_check_cooldown
-            # Rotate plant notification
-            # Mist plant notification
-            sensor_check_next_time = current_time + SENSOR_CHECK_COOLDOWN
+                    # Camera stuff
+                    #image = io.BytesIO()
+                    #camera.capture(image, 'jpeg')
+                    #image.seek(0)
+                    #with open('image.jpg', 'wb') as image_file:
+                        #image_file.write(image.read())
+            
+            if current_time >= sensor_check_next_time:
+                blynk.run()  # Process Blynk events
+                if current_time >= light_check_next_time:
+                    process_light_data()
+                    light_check_next_time = current_time + LIGHT_CHECK_COOLDOWN
+                if current_time >= daily_task_next_time:
+                    process_soil_data()
+                    send_daily_notification()
+                    get_next_daily_task_time()
+                sensor_check_next_time = current_time + SENSOR_CHECK_COOLDOWN
 
-        sleep(MOTION_CHECK_DELAY)
+            sleep(MOTION_CHECK_DELAY)
+    except KeyboardInterrupt:
+        print("Blynk application stopped.")
