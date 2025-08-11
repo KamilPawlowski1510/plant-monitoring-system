@@ -12,6 +12,7 @@ from grove.adc import ADC
 from grove.grove_light_sensor_v1_2 import GroveLightSensor
 from grove.grove_moisture_sensor import GroveMoistureSensor
 from grove.grove_relay import GroveRelay
+from azure.storage.blob import ContainerClient, ContentSettings
 
 # Blynk authentication token
 BLYNK_AUTH = "7os_iwPxKnhgay7WX-KhXgzXi9mgb2Ib"
@@ -42,6 +43,9 @@ camera.resolution = (640, 480)
 camera.rotation = 180
 #time.sleep(2)
 
+# Azure blob storage container
+container_client = ContainerClient.from_connection_string("DefaultEndpointsProtocol=https;AccountName=smskman1510;AccountKey=6uIe1RPi+CLyvKpJHIGExkPAse9pRepXThBE+tIkobiPawHuPIQS5NvoiT/ycuJP8Uw9HGn3o8+3+AStJoSimQ==;EndpointSuffix=core.windows.net", "plant-monitoring-images")
+
 MOTION_CHECK_DELAY = 0.1 # How often to check for motion
 MOTION_THRESHOLD = 0.05 # g's acceptable above and below 1 (gravity)
 MOTION_CHECK_COOLDOWN = 2 # How long to not check for motion after motion was detected
@@ -63,10 +67,9 @@ watering_needed = False
 misting_counter = 0
 mist_every_x_days = 2
 
-
-def log_data(data_type, value, unit):
+def log_data(data):
     date_time = datetime.fromtimestamp(current_time).strftime('%d/%m/%Y, %H:%M:%S')
-    formatted_data = f"[{date_time}] {data_type}: {value} {unit}\n"
+    formatted_data = f"[{date_time}] {data}\n"
     with open("logged_data.txt", "a") as f:
         f.write(formatted_data)
     print(formatted_data)
@@ -77,14 +80,14 @@ def detect_motion() -> bool:
     if abs(force - 1) > MOTION_THRESHOLD:
         global motion_cooldown_time
         motion_cooldown_time = time.time() + MOTION_CHECK_COOLDOWN
-        log_data("Motion Detected", force, "g")
+        log_data(f"Motion Detected: {force} g")
         return True
     else:
         return False
 
 def process_light_data():
     light = light_sensor.light / 10.0
-    log_data("Light", light, "%")
+    log_data(f"Light: {light}%")
     blynk.virtual_write(0, light)
     if light < light_min_value:
         relay.on()
@@ -95,7 +98,7 @@ def process_light_data():
 
 def process_soil_data():
     moisture_mv = moisture_sensor.moisture
-    log_data("Soil Moisture", moisture_mv, "mV")
+    log_data(f"Soil Moisture: {moisture_mv} mV")
     blynk.virtual_write(1, moisture_mv)
     if moisture_mv > soil_max_value:
         watering_needed = True
@@ -133,6 +136,19 @@ def send_daily_notification():
         message += ", water the plant"
     blynk.log_event("daily_notification", message)
 
+def capture_image():
+    image = io.BytesIO()
+    camera.capture(image, 'jpeg')
+    image.seek(0)
+
+    with open('image.jpg', 'wb') as image_file:
+        image_file.write(image.read())
+    
+    log_data("Image captured")
+
+def upload_image():
+    with open(file="image.jpg", mode="rb") as data:
+        container_client.upload_blob(name="image.jpg", data=data, overwrite=True, content_settings=ContentSettings(content_type="image/jpeg"))
 
 # Main loop to keep the Blynk connection alive and process events
 if __name__ == "__main__":
@@ -144,15 +160,8 @@ if __name__ == "__main__":
                 if motion_cooldown_time:
                     motion_cooldown_time = 0
                 if detect_motion():
-                    pass
-                    # TODO Implement azure functionality
-
-                    # Camera stuff
-                    #image = io.BytesIO()
-                    #camera.capture(image, 'jpeg')
-                    #image.seek(0)
-                    #with open('image.jpg', 'wb') as image_file:
-                        #image_file.write(image.read())
+                    capture_image()
+                    upload_image()
             
             if current_time >= sensor_check_next_time:
                 blynk.run()  # Process Blynk events
