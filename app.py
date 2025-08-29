@@ -43,7 +43,6 @@ custom_vision = None
 
 # User config
 daily_task_hour = 12
-# TODO Make light min, soil max, and misting delay be customisable by user
 
 # Timestamps
 motion_check_unblock_time = 0 # Next time motion checks are allowed from
@@ -171,7 +170,6 @@ def send_daily_notification() -> None:
         
     blynk.log_event("daily_notification", message)
     print("Sent daily notification to Blynk with message:", message)
-    # TODO Add to dashboard daily tasks, for user clarity
 
 
 def upload_image() -> None:
@@ -253,4 +251,3 @@ if __name__ == "__main__":
     finally:
         hardware_manager.turn_off_relay()
         blynk.virtual_write(2, "Currently Off")
-        # TODO turn off sensehat if we add flashing
