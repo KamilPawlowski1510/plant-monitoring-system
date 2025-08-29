@@ -14,7 +14,7 @@ class HardwareManager:
     """Manages all interactions with grove modules and logging sensor data."""
     _DEFAULT_ADC = ADC(0x08) # Needed for Light and Moisture sensors
     _MOTION_THRESHOLD = 0.05 # g's acceptable above and below 1 (gravity)
-    _CAMERA_RESOLUTION = (640, 480)
+    _CAMERA_RESOLUTION = (1280, 720)
 
     def __init__(self) -> None:
         """Initialise grove modules."""
