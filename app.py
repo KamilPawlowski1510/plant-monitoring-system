@@ -59,7 +59,7 @@ misting_counter = 0
 watering_needed = False
 
 
-def process_light_data():
+def process_light_data() -> None:
     """Read light sensor data, control relay as needed, update Blynk."""
     light = hardware_manager.get_light_data()
     blynk.virtual_write(0, light)
@@ -72,7 +72,7 @@ def process_light_data():
         blynk.virtual_write(2, "Currently Off")
 
 
-def process_moisture_data():
+def process_moisture_data() -> None:
     """Read moisture sensor data, update Blynk, decide if watering is needed."""
     global watering_needed
     moisture = hardware_manager.get_moisture_data()
@@ -81,7 +81,7 @@ def process_moisture_data():
     watering_needed = moisture > MOISTURE_MAX_VALUE
 
 
-def update_daily_task_time():
+def update_daily_task_time() -> None:
     """Updates daily_task_time to the next instance of the daily_task_hour."""
     global daily_task_time
 
@@ -111,7 +111,7 @@ def blynk_daily_hour_change(value):
     update_daily_task_time()
 
 
-def send_daily_notification():
+def send_daily_notification() -> None:
     """Determine todays tasks for the user and send a notification via Blynk."""
     global misting_counter
     message = "Todays tasks: Rotate the plant"
