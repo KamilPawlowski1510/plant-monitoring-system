@@ -24,7 +24,7 @@ project_id = parts[6]
 iteration_name = parts[9]
 
 prediction_credentials = ApiKeyCredentials(in_headers={"Prediction-key": CUSTOM_VISION_KEY})
-predictor = CustomVisionPredictionClient(endpoint, prediction_credentials)
+custom_vision = CustomVisionPredictionClient(endpoint, prediction_credentials)
 
 # Delays (seconds)
 MOTION_CHECK_DELAY = 0.1 # Between motion checks
@@ -141,9 +141,9 @@ def upload_image() -> None:
 
 
 def get_attacker_from_image() -> str:
-    """UPDATE THISSSSSSSSS"""
+    """Upload image to custom vision and return who was the attacker"""
     with open(file="image.jpg", mode="rb") as image:
-        results = predictor.classify_image(project_id, iteration_name, image)
+        results = custom_vision.classify_image(project_id, iteration_name, image)
 
         print("Attacker predictions:")
         for prediction in results.predictions:
