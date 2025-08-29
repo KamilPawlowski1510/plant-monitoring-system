@@ -2,15 +2,29 @@ from datetime import datetime
 import time
 from time import sleep
 
-import BlynkLib
+from azure.cognitiveservices.vision.customvision.prediction import CustomVisionPredictionClient
 from azure.storage.blob import ContainerClient, ContentSettings
+import BlynkLib
+from msrest.authentication import ApiKeyCredentials
 
 from hardware_manager import HardwareManager
+
 
 # Authentication
 BLYNK_AUTH = "7os_iwPxKnhgay7WX-KhXgzXi9mgb2Ib"
 AZURE_CONTAINER_AUTH = "DefaultEndpointsProtocol=https;AccountName=smskman1510;AccountKey=6uIe1RPi+CLyvKpJHIGExkPAse9pRepXThBE+tIkobiPawHuPIQS5NvoiT/ycuJP8Uw9HGn3o8+3+AStJoSimQ==;EndpointSuffix=core.windows.net"
 AZURE_CONTAINER_NAME = "plant-monitoring-images"
+CUSTOM_VISION_URL = 'https://northeurope.api.cognitive.microsoft.com/customvision/v3.0/Prediction/675f1359-659d-416c-a23f-134e3c3ca9ba/classify/iterations/Iteration2/image'
+CUSTOM_VISION_KEY = 'd09e97f6ea7f48f3b7b9128c9fc5bc58'
+
+# TODO Move this into a function in a try except block at the start
+parts = CUSTOM_VISION_URL.split('/')
+endpoint = 'https://' + parts[2]
+project_id = parts[6]
+iteration_name = parts[9]
+
+prediction_credentials = ApiKeyCredentials(in_headers={"Prediction-key": CUSTOM_VISION_KEY})
+predictor = CustomVisionPredictionClient(endpoint, prediction_credentials)
 
 # Delays (seconds)
 MOTION_CHECK_DELAY = 0.1 # Between motion checks
@@ -115,7 +129,7 @@ def send_daily_notification():
     # TODO Add to dashboard daily tasks, for user clarity
 
 
-def upload_image():
+def upload_image() -> None:
     """Upload image from Pi camera to Azure Blob Storage"""
     with open(file="image.jpg", mode="rb") as data:
         container_client.upload_blob(
@@ -124,6 +138,18 @@ def upload_image():
             overwrite=True,
             content_settings=ContentSettings(content_type="image/jpeg")
         )
+
+
+def get_attacker_from_image() -> str:
+    """UPDATE THISSSSSSSSS"""
+    with open(file="image.jpg", mode="rb") as image:
+        results = predictor.classify_image(project_id, iteration_name, image)
+
+        print("Attacker predictions:")
+        for prediction in results.predictions:
+            print(f'{prediction.tag_name}:\t{prediction.probability * 100:.2f}%')
+        
+        return results.predictions[0].tag_name.capitalize()
 
 
 # Main loop to process sensor data, send and receive data to/from Blynk, upload images to azure and manage timekeeping
@@ -138,6 +164,8 @@ if __name__ == "__main__":
 
                 hardware_manager.capture_image()
                 upload_image()
+                attacker = get_attacker_from_image()
+                print("THIS IS THE ATTACKER:", attacker)
                 # TODO: Notification here
             
             # Sensor checks
