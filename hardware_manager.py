@@ -74,7 +74,9 @@ class HardwareManager:
     def turn_on_relay(self) -> None:
         """Turn on relay."""
         self.relay.on()
+        print("Relay turned on")
     
     def turn_off_relay(self) -> None:
         """Turn off relay."""
         self.relay.off()
+        print("Relay turned off")
