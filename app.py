@@ -63,6 +63,7 @@ def process_light_data() -> None:
     """Read light sensor data, control relay as needed, update Blynk."""
     light = hardware_manager.get_light_data()
     blynk.virtual_write(0, light)
+    print("Sent light data to Blynk")
 
     if light < LIGHT_MIN_VALUE:
         hardware_manager.turn_on_relay()
@@ -70,6 +71,7 @@ def process_light_data() -> None:
     else:
         hardware_manager.turn_off_relay()
         blynk.virtual_write(2, "Currently Off")
+    print("Sent relay status to Blynk")
 
 
 def process_moisture_data() -> None:
@@ -77,6 +79,7 @@ def process_moisture_data() -> None:
     global watering_needed
     moisture = hardware_manager.get_moisture_data()
     blynk.virtual_write(1, moisture)
+    print("Sent moisture data to Blynk")
 
     watering_needed = moisture > MOISTURE_MAX_VALUE
 
@@ -126,6 +129,7 @@ def send_daily_notification() -> None:
         message += ", water the plant"
         
     blynk.log_event("daily_notification", message)
+    print("Sent daily notificaiton to Blynk with message:", message)
     # TODO Add to dashboard daily tasks, for user clarity
 
 
@@ -138,18 +142,23 @@ def upload_image() -> None:
             overwrite=True,
             content_settings=ContentSettings(content_type="image/jpeg")
         )
+    print("Uploaded image to Azure blob storage")
 
 
-def get_attacker_from_image() -> str:
+def get_attacker_from_image() -> None:
     """Upload image to custom vision and return who was the attacker"""
     with open(file="image.jpg", mode="rb") as image:
         results = custom_vision.classify_image(project_id, iteration_name, image)
+        print("Sent image to Custom Vision")
 
         print("Attacker predictions:")
         for prediction in results.predictions:
             print(f'{prediction.tag_name}: {prediction.probability * 100:.2f}%')
         
-        return results.predictions[0].tag_name.capitalize()
+        attacker = results.predictions[0].tag_name.capitalize()
+        message = f"{attacker} has touched your plant!"
+        blynk.log_event("attack_notification", message)
+        print("Sent attacker notification to Blynk with message:", message)
 
 
 # Main loop to process sensor data, send and receive data to/from Blynk, upload images to azure and manage timekeeping
@@ -164,23 +173,29 @@ if __name__ == "__main__":
 
                 hardware_manager.capture_image()
                 upload_image()
-                attacker = get_attacker_from_image()
-                blynk.log_event("attack_notification", f"{attacker} has touched your plant!")
+                get_attacker_from_image()
+                print()
             
             # Sensor checks
             if current_time >= sensor_check_time:
+                print("Processing regular tasks")
+
+                print("Running blynk events")
                 blynk.run()  # Process Blynk events
+
                 process_light_data()
 
                 # Daily tasks
                 if current_time >= daily_task_time:
+                    print(f"\nProcessing daily tasks")
+                    
                     process_moisture_data()
                     send_daily_notification()
 
                     update_daily_task_time()
 
                 sensor_check_time = current_time + SENSOR_CHECK_COOLDOWN
-                print() # Add a newline for clarity
+                print()
 
             sleep(MOTION_CHECK_DELAY)
 
