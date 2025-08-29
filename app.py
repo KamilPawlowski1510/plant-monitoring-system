@@ -147,7 +147,7 @@ def get_attacker_from_image() -> str:
 
         print("Attacker predictions:")
         for prediction in results.predictions:
-            print(f'{prediction.tag_name}:\t{prediction.probability * 100:.2f}%')
+            print(f'{prediction.tag_name}: {prediction.probability * 100:.2f}%')
         
         return results.predictions[0].tag_name.capitalize()
 
@@ -165,8 +165,7 @@ if __name__ == "__main__":
                 hardware_manager.capture_image()
                 upload_image()
                 attacker = get_attacker_from_image()
-                print("THIS IS THE ATTACKER:", attacker)
-                # TODO: Notification here
+                blynk.log_event("attack_notification", f"{attacker} has touched your plant!")
             
             # Sensor checks
             if current_time >= sensor_check_time:
