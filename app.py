@@ -180,8 +180,14 @@ if __name__ == "__main__":
                     update_daily_task_time()
 
                 sensor_check_time = current_time + SENSOR_CHECK_COOLDOWN
+                print() # Add a newline for clarity
 
             sleep(MOTION_CHECK_DELAY)
 
     except KeyboardInterrupt:
         print("Blynk application stopped.")
+    
+    finally:
+        hardware_manager.turn_off_relay()
+        blynk.virtual_write(2, "Currently Off")
+        # TODO turn off sensehat if we add flashing
